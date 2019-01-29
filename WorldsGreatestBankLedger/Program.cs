@@ -1,21 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Data;
-using System.Data.SqlClient;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace WorldsGreatestBankLedger
 {
     class Program
     {
-        private static string _userName = "";
-        private static string _fName = "";
-        private static string _lName = "";
-        private static bool _authenticated = false;
-
-
         static void Main(string[] args)
         {
             Customer cust = new Customer(); //create new customer obj
@@ -43,14 +32,10 @@ namespace WorldsGreatestBankLedger
                     Console.WriteLine("Im sorry, I dont understand your answer.  Please respond with Yes or No");
                 }
             }
-            Console.WriteLine("");
-            Console.WriteLine("-------------end of MAIN-------------");
-            Console.ReadLine(); //pause app for inspection, remove before ship.
         }
 
-        //Account creation and login
-        #region 
-        private static void CreateAccount(Customer cust)//needs more work
+        #region Account creation and login methods
+        private static void CreateAccount(Customer cust)
         {
             string pw = "";
             string pwConf = "";
@@ -63,13 +48,18 @@ namespace WorldsGreatestBankLedger
             Console.WriteLine("What is your last name?");
             cust.SetCustomerLastName(Console.ReadLine());
 
-            //set up Username and password
+            //set Username
             Console.WriteLine("What would you like your User Name to be?");
             cust.SetCustomerUserName(Console.ReadLine().Trim());
 
-            //TODO: Query DB accounts table to Check if UserName Exists already
+            //check if Username exists in accounts table, stay in loop until a unique username is entered
+            while (SQL_Data.UserNameExist(cust.GetCustomerUserName()))
+            {
+                Console.WriteLine("That Username has already been used, please try a different User Name");
+                cust.SetCustomerUserName(Console.ReadLine().Trim());
+            }
 
-
+            //Set Password
             Console.WriteLine("Please enter a password:");
             pw = ReadPassword();
             Console.WriteLine("Please confirm your password:");
@@ -83,20 +73,18 @@ namespace WorldsGreatestBankLedger
                 pwConf = ReadPassword();
             }
             cust.SetCustomerPassword(pw);
+            
+            //Commit data to table
+            int r = SQL_Data.SetData(cust);
 
-            //in the future, dont store plain text passwords (use some type of encryption/hashing)
-
-            //TODO: COMMIT ACCOUNT INFO TO DATABASE
-
-            int r = DBWork.SqlSPROC(cust);
-
+            //notify success/failure
             if (r == 0)
             {
                 Console.WriteLine("There was a problem creating your account, please try again later.");
             }
             else
             {
-                Console.WriteLine("Congratulations " + _fName + ", your account has been successfuly created!");
+                Console.WriteLine("Congratulations " + cust.GetCustomerFirstName() + ", your account has been successfuly created!");
                 Console.WriteLine("You may now login to the Worlds Greatest Banking Ledger!");
                 Console.WriteLine("--------------------------------------------------------------------------");
                 Console.WriteLine("");
@@ -104,24 +92,22 @@ namespace WorldsGreatestBankLedger
             }
         }
 
-        private static void Login(Customer cust)//needs more work
+        private static void Login(Customer cust)
         {
             Console.WriteLine("Please enter your User Name:");
             cust.SetCustomerUserName(Console.ReadLine().Trim());
             Console.WriteLine("Please enter your Password:");
             cust.SetCustomerPassword(ReadPassword());
 
-            bool userExists = DBWork.UserNameExist(cust.GetCustomerUserName());//check if user exists
-            bool passwordValid = DBWork.ValidatePassword(cust.GetCustomerUserName(), cust.GetCustomerPassword());//validate password is correct
+            bool userExists = SQL_Data.UserNameExist(cust.GetCustomerUserName());//check if user exists
+            bool passwordValid = SQL_Data.ValidatePassword(cust.GetCustomerUserName(), cust.GetCustomerPassword());//validate password is correct
             
             if (userExists && passwordValid)
             {
-                _authenticated = true;
                 WhatNow(cust);
             }
             else
             {
-                _authenticated = false;
                 Console.WriteLine("The Credentials you entered were incorrect, please try again.");
                 Login(cust);
             }
@@ -163,17 +149,19 @@ namespace WorldsGreatestBankLedger
         }
         #endregion
 
-        #region
-        private static void WhatNow(Customer cust)
+        #region Workflow Methods
+        private static void WhatNow(Customer cust)//main menu
         {
             Console.WriteLine("What would you like to do now?  You can do any of the following:");
             Console.WriteLine("     1. Record a deposit");
             Console.WriteLine("     2. Record a withdrawal");
             Console.WriteLine("     3. Check balance");
             Console.WriteLine("     4. See transaction history");
-            Console.WriteLine("     5. Logout");
-            Console.WriteLine("     6. Create another new account");
-            Console.Write("Please enter 1-6: ");
+            Console.WriteLine("     5. Create another new account");
+            Console.WriteLine("     6. Logout & Login as another User");
+            Console.WriteLine("     7. Logout & Exit");
+
+            Console.Write("Please enter a number (1-7): ");
             string choice = Console.ReadLine();
             choice = choice.Trim();
             
@@ -191,15 +179,18 @@ namespace WorldsGreatestBankLedger
                 case "4"://display tran hist
                     DisplayTranHist(cust);
                     break;
-                case "5"://logout
-                    _authenticated = false;
+                case "5"://create another account
+                    CreateAccount(cust);
+                    break;
+                case "6"://logout and back in
+                    cust.SetCustomer("", "", "", "");//clean any stored values in the Customer Object
                     Console.WriteLine("Logout is complete!");
-                    Console.WriteLine("");
-                    Console.WriteLine("");
+                    Console.WriteLine("Please Login to continue... ");
                     Login(cust);
                     break;
-                case "6"://create another account
-                    CreateAccount(cust);
+                case "7"://exit app
+                    cust.SetCustomer("", "", "", "");//clean any stored values in the Customer Object
+                    Environment.Exit(0);
                     break;
                 default://do nothing and ask again
                     Console.WriteLine("That was not a valid response Please try again.");
@@ -207,7 +198,8 @@ namespace WorldsGreatestBankLedger
                     break;
             }
         }
-        private static void RecordDeposit(Customer cust)
+
+        private static void RecordDeposit(Customer cust)//option 1 on main menu
         {
             decimal amount = 0;   
             Console.WriteLine("You chose to Record a Deposit, how much? ");
@@ -221,13 +213,13 @@ namespace WorldsGreatestBankLedger
                 Console.WriteLine("you entered an invalid value, please try again and use decimal values only.");
                 RecordDeposit(cust);
             }           
-            DBWork.SqlSPROC(cust, "deposit", amount);
+            SQL_Data.SetData(cust, "deposit", amount);
             Console.WriteLine("Your deposit of $" + amount + " was recorded");
             Console.WriteLine("");
             WhatNow(cust);
         }
 
-        private static void RecordWithdrawal(Customer cust)
+        private static void RecordWithdrawal(Customer cust)//option 2 on main menu
         {
             decimal amount = 0;
             Console.WriteLine("You chose to Record a Withdrawal, how much? ");
@@ -241,24 +233,24 @@ namespace WorldsGreatestBankLedger
                 Console.WriteLine("you entered an invalid value, please try again and use decimal values only.");
                 RecordWithdrawal(cust);
             }
-            DBWork.SqlSPROC(cust, "withdraw", amount);
+            SQL_Data.SetData(cust, "withdraw", amount);
             Console.WriteLine("Your withdrawal of $" + amount + " was recorded");
             Console.WriteLine("");
             WhatNow(cust);
         }
         
-        private static void CheckBalance(Customer cust)
+        private static void CheckBalance(Customer cust)//option 3 on main menu
         {
-            string amount = DBWork.CheckBalance(cust).ToString();
+            string amount = SQL_Data.CheckBalance(cust).ToString();
             amount = amount.Substring(0, amount.Length - 2);
             Console.WriteLine("Your Current Balance is $" + amount);
             Console.WriteLine("");
             WhatNow(cust);
         }
 
-        private static void DisplayTranHist(Customer cust)
+        private static void DisplayTranHist(Customer cust)//option 4 on main menu
         {
-            DataTable table = DBWork.TranHist(cust);
+            DataTable table = SQL_Data.TranHist(cust);
             Console.WriteLine("-------------------------------------------------------------------------");
             for (int i = 0; i< table.Rows.Count; i++)
             {

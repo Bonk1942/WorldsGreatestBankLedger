@@ -1,29 +1,25 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Data.SqlClient;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Data;
+using System.Data.SqlClient;
 
 namespace WorldsGreatestBankLedger
 {
-    class DBWork
+    class SQL_Data
     {
-        public static SqlConnection con = new SqlConnection();
-        
+        private static SqlConnection con = new SqlConnection();
 
-        private static void DBConnect()//set up SQL Connection
+        #region Private Methods
+        private static void DBConnect()//using this so I can easily change Connection String depending on where I am working on this.
         {
             //local desktop DB Connection String
-            con.ConnectionString = (@"Data Source = localhost; Initial Catalog = WorldsGreatestBankingLedger; Integrated Security = True");
+            //con.ConnectionString = (@"Data Source = localhost; Initial Catalog = WorldsGreatestBankingLedger; Integrated Security = True");
 
             //local laptop DB Connection String
-            //con.ConnectionString = (@"Data Source=BELDZB15U31619\MSSQLSERVER2017;Initial Catalog=WorldsGreatestBankingLedger;Integrated Security=True");
+            con.ConnectionString = (@"Data Source=BELDZB15U31619\MSSQLSERVER2017;Initial Catalog=WorldsGreatestBankingLedger;Integrated Security=True");
             
         }
 
-        private static int ExecuteSQL(SqlCommand cmd)
+        private static int ExecuteSPROC(SqlCommand cmd)//This is reusable for SPROCS
         {
             int r = 0;
             try
@@ -38,9 +34,20 @@ namespace WorldsGreatestBankLedger
                 cmd.Parameters.Clear();
             }
             return r;
-        }//execute sql commands
+        }
 
-        public static int SqlSPROC(Customer cust)//create account
+        private static DataTable ExecuteSQLText(SqlCommand cmd, ref DataTable table)//This is reusable for Views
+        {
+            con.Open();
+            table.Load(cmd.ExecuteReader());
+            con.Close();
+            return table;
+        }
+
+        #endregion
+
+        #region Public Methods
+        public static int SetData(Customer cust)//create account (overloaded)
         {
             DBConnect();
             SqlCommand cmd = new SqlCommand();
@@ -54,11 +61,12 @@ namespace WorldsGreatestBankLedger
             cmd.Parameters.Add("@PW", SqlDbType.NVarChar, 255).Value = cust.GetCustomerPassword();
 
 
-            int r = ExecuteSQL(cmd);
+            int r = ExecuteSPROC(cmd);
+            int r2 = SetData(cust, "deposit", 0);
             return r;
         }
 
-        public static int SqlSPROC(Customer cust, string tranType, decimal amount)//deposit & withdraw 
+        public static int SetData(Customer cust, string tranType, decimal amount)//deposit & withdraw (overloaded)
         {
             DBConnect();
             SqlCommand cmd = new SqlCommand();
@@ -76,44 +84,40 @@ namespace WorldsGreatestBankLedger
                     cmd.Parameters.Add("@Debit", SqlDbType.Money).Value = amount;
                     break;
                 default:
-                    return 0;//get out of method and return 0... this shouldnt ever happen.
+                    return 0;
             }
 
-            int r = ExecuteSQL(cmd);
+            int r = ExecuteSPROC(cmd);
             return r;
         }
         
-        public static decimal CheckBalance(Customer cust)
+        public static decimal CheckBalance(Customer cust)//returns a single value as a decimal
         {
             DBConnect();
             SqlCommand cmd = new SqlCommand();
             cmd.Connection = con;
             cmd.CommandType = CommandType.Text;
             // Table to store the query results
-            DataTable table = new DataTable();
+            DataTable balance = new DataTable();
             cmd.CommandText = "SELECT sum([Credit]) - sum([Debit]) as bal FROM [vw_TranHist] WHERE  [UserName] LIKE '" + cust.GetCustomerUserName() + "'";
-            con.Open();
-            table.Load(cmd.ExecuteReader());
-            con.Close();
-            return Convert.ToDecimal(table.Rows[0][0].ToString());
+            ExecuteSQLText(cmd, ref balance);
+            return Convert.ToDecimal(balance.Rows[0][0].ToString());
         }
 
-        public static DataTable TranHist(Customer cust)
+        public static DataTable TranHist(Customer cust)//returns a DataTable with as many rows as there are returned from Query
         {
             DBConnect();
             SqlCommand cmd = new SqlCommand();
             cmd.Connection = con;
             cmd.CommandType = CommandType.Text;
             // Table to store the query results
-            DataTable table = new DataTable();
+            DataTable tranHist = new DataTable();
             cmd.CommandText = "SELECT TranDate, Debit, Credit FROM [vw_TranHist] WHERE  [UserName] LIKE '" + cust.GetCustomerUserName() + "'";
-            con.Open();
-            table.Load(cmd.ExecuteReader());
-            con.Close();
-            return table;
+            ExecuteSQLText(cmd, ref tranHist);
+            return tranHist;
         }
 
-        public static bool UserNameExist(string userName)
+        public static bool UserNameExist(string userName)//returns true if user exists in accounts table, false if not.
         {
             DBConnect(); SqlCommand cmd = new SqlCommand();
             cmd.Connection = con;
@@ -132,7 +136,7 @@ namespace WorldsGreatestBankLedger
             return false;
         }
 
-        public static bool ValidatePassword(string userName, string password)
+        public static bool ValidatePassword(string userName, string password)//returns true if username and password are a match with whats in SQL table
         {
             DBConnect();
             SqlCommand cmd = new SqlCommand();
@@ -151,6 +155,7 @@ namespace WorldsGreatestBankLedger
             }
             return false;
         }
+        #endregion
     }
-    
+
 }

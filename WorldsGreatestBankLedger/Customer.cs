@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace WorldsGreatestBankLedger
+﻿namespace WorldsGreatestBankLedger
 {
     class Customer
     {
@@ -12,9 +6,8 @@ namespace WorldsGreatestBankLedger
         string FirstName;
         string LastName;
         string Password;
-
-        //Set
-        #region
+        
+        #region Setters
         public void SetCustomer(string un, string fn, string ln, string pw)
         {
             UserName = un;
@@ -42,10 +35,9 @@ namespace WorldsGreatestBankLedger
         {
             Password = pass;
         }
-        #endregion
-
-        //Get
-        #region
+        #endregion Set M
+        
+        #region Getters
         public string GetCustomerUserName()
         {
             return UserName;
@@ -67,5 +59,5 @@ namespace WorldsGreatestBankLedger
         }
         #endregion
 
-    }//end class
-}//end namespace
+    }
+}

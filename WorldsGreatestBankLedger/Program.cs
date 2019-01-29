@@ -10,12 +10,6 @@ namespace WorldsGreatestBankLedger
 {
     class Program
     {
- 
-
-        private static SqlConnection con = new SqlConnection();
-        private static SqlCommand cmd = new SqlCommand();
-
-
         private static string _userName = "";
         private static string _fName = "";
         private static string _lName = "";
@@ -25,15 +19,7 @@ namespace WorldsGreatestBankLedger
         static void Main(string[] args)
         {
             Customer cust = new Customer(); //create new customer obj
-
-            //local desktop DB Connection String
-            //con.ConnectionString = (@"Data Source = localhost; Initial Catalog = WorldsGreatestBankingLedger; Integrated Security = True");
-
-            //local laptop DB Connection String
-            con.ConnectionString = (@"Data Source=BELDZB15U31619\MSSQLSERVER2017;Initial Catalog=WorldsGreatestBankingLedger;Integrated Security=True");
-
-            cmd.Connection = con;
-
+            
             string existingCustomer = "";
             bool valid = false; // set to false for the While loop to validate answer
             Console.WriteLine("Welcome to the Worlds Greatest Banking Ledger!");
@@ -57,6 +43,8 @@ namespace WorldsGreatestBankLedger
                     Console.WriteLine("Im sorry, I dont understand your answer.  Please respond with Yes or No");
                 }
             }
+            Console.WriteLine("");
+            Console.WriteLine("-------------end of MAIN-------------");
             Console.ReadLine(); //pause app for inspection, remove before ship.
         }
 
@@ -100,7 +88,7 @@ namespace WorldsGreatestBankLedger
 
             //TODO: COMMIT ACCOUNT INFO TO DATABASE
 
-            int r = sqlSPROC(cust);
+            int r = DBWork.SqlSPROC(cust);
 
             if (r == 0)
             {
@@ -123,12 +111,20 @@ namespace WorldsGreatestBankLedger
             Console.WriteLine("Please enter your Password:");
             cust.SetCustomerPassword(ReadPassword());
 
-            // TODO: Query DB Account table to Check if Username exists
-            //       If User does not Exist, tell them they the credentials they provided were incorrect, please try again Login(); Set _authenticated = false; Login(cust);
-            //       Else If User does Exist validate Password against whats in DB for User
-            //            If password entered doesnt match password in db tell them they the credentials they provided were incorrect, please try again Set _authenticated = false; Login(cust);
-            //            Else if Password Matches, allow them to do more..... What would you like to do? method Set _authenticated = true;
-
+            bool userExists = DBWork.UserNameExist(cust.GetCustomerUserName());//check if user exists
+            bool passwordValid = DBWork.ValidatePassword(cust.GetCustomerUserName(), cust.GetCustomerPassword());//validate password is correct
+            
+            if (userExists && passwordValid)
+            {
+                _authenticated = true;
+                WhatNow(cust);
+            }
+            else
+            {
+                _authenticated = false;
+                Console.WriteLine("The Credentials you entered were incorrect, please try again.");
+                Login(cust);
+            }
         }
 
         private static string ReadPassword() //mask user input when they are typing the password
@@ -167,61 +163,120 @@ namespace WorldsGreatestBankLedger
         }
         #endregion
 
-        //SQL
         #region
-        private static int sqlSPROC(Customer cust)//create account
+        private static void WhatNow(Customer cust)
         {
-            cmd.CommandType = CommandType.StoredProcedure;
-            cmd.CommandText = "sp_CreateAccount";
-
-            cmd.Parameters.Add("@UserName", SqlDbType.NVarChar, 100).Value = cust.GetCustomerUserName();
-            cmd.Parameters.Add("@FirstName", SqlDbType.NVarChar, 50).Value = cust.GetCustomerFirstName();
-            cmd.Parameters.Add("@LastName", SqlDbType.NVarChar, 50).Value = cust.GetCustomerLastName();
-            cmd.Parameters.Add("@PW", SqlDbType.NVarChar, 255).Value = cust.GetCustomerPassword();
-
-            int r;
+            Console.WriteLine("What would you like to do now?  You can do any of the following:");
+            Console.WriteLine("     1. Record a deposit");
+            Console.WriteLine("     2. Record a withdrawal");
+            Console.WriteLine("     3. Check balance");
+            Console.WriteLine("     4. See transaction history");
+            Console.WriteLine("     5. Logout");
+            Console.WriteLine("     6. Create another new account");
+            Console.Write("Please enter 1-6: ");
+            string choice = Console.ReadLine();
+            choice = choice.Trim();
+            
+            switch (choice)
+            {
+                case "1"://deposit
+                    RecordDeposit(cust);
+                    break;
+                case "2"://withdrawal
+                    RecordWithdrawal(cust);
+                    break;
+                case "3"://check balance
+                    CheckBalance(cust);
+                    break;
+                case "4"://display tran hist
+                    DisplayTranHist(cust);
+                    break;
+                case "5"://logout
+                    _authenticated = false;
+                    Console.WriteLine("Logout is complete!");
+                    Console.WriteLine("");
+                    Console.WriteLine("");
+                    Login(cust);
+                    break;
+                case "6"://create another account
+                    CreateAccount(cust);
+                    break;
+                default://do nothing and ask again
+                    Console.WriteLine("That was not a valid response Please try again.");
+                    WhatNow(cust);
+                    break;
+            }
+        }
+        private static void RecordDeposit(Customer cust)
+        {
+            decimal amount = 0;   
+            Console.WriteLine("You chose to Record a Deposit, how much? ");
+            string response = Console.ReadLine();
             try
             {
-                con.Open();
-                r = cmd.ExecuteNonQuery();
+                amount = Convert.ToDecimal(response);
             }
-            finally
+            catch
             {
-                con.Close();
-            }
-            return r;
+                Console.WriteLine("you entered an invalid value, please try again and use decimal values only.");
+                RecordDeposit(cust);
+            }           
+            DBWork.SqlSPROC(cust, "deposit", amount);
+            Console.WriteLine("Your deposit of $" + amount + " was recorded");
+            Console.WriteLine("");
+            WhatNow(cust);
         }
 
-        private static int sqlSPROC(Customer cust, string tranType, decimal amount)//deposit & withdraw 
+        private static void RecordWithdrawal(Customer cust)
         {
-            cmd.CommandType = CommandType.StoredProcedure;
-            cmd.Parameters.Add("@UserName", SqlDbType.NVarChar, 100).Value = cust.GetCustomerUserName();
-            switch (tranType.Trim().ToLower())
-            {
-                case "deposit":
-                    cmd.CommandText = "sp_Deposit";
-                    cmd.Parameters.Add("@Credit", SqlDbType.Money).Value = amount;
-                    break;
-                case "withdraw":
-                    cmd.CommandText = "sp_Withdraw";
-                    cmd.Parameters.Add("@Debit", SqlDbType.Money).Value = amount;
-                    break;
-                default:
-                    return 0;//get out of method and return 0... this shouldnt ever happen.
-            }
-
-            int r;
+            decimal amount = 0;
+            Console.WriteLine("You chose to Record a Withdrawal, how much? ");
+            string response = Console.ReadLine();
             try
             {
-                con.Open();
-                r = cmd.ExecuteNonQuery();
+                amount = Convert.ToDecimal(response);
             }
-            finally
+            catch
             {
-                con.Close();
+                Console.WriteLine("you entered an invalid value, please try again and use decimal values only.");
+                RecordWithdrawal(cust);
             }
-            return r;
+            DBWork.SqlSPROC(cust, "withdraw", amount);
+            Console.WriteLine("Your withdrawal of $" + amount + " was recorded");
+            Console.WriteLine("");
+            WhatNow(cust);
         }
-        #endregion 
+        
+        private static void CheckBalance(Customer cust)
+        {
+            string amount = DBWork.CheckBalance(cust).ToString();
+            amount = amount.Substring(0, amount.Length - 2);
+            Console.WriteLine("Your Current Balance is $" + amount);
+            Console.WriteLine("");
+            WhatNow(cust);
+        }
+
+        private static void DisplayTranHist(Customer cust)
+        {
+            DataTable table = DBWork.TranHist(cust);
+            Console.WriteLine("-------------------------------------------------------------------------");
+            for (int i = 0; i< table.Rows.Count; i++)
+            {
+                string date = table.Rows[i][0].ToString().Substring(0, 10);
+                int spaceIndex = date.IndexOf(" ");
+                date = date.Substring(0, spaceIndex);
+
+                string withdraw = table.Rows[i][1].ToString();
+                withdraw = withdraw.Substring(0, withdraw.Length - 2);
+
+                string deposit = table.Rows[i][2].ToString();
+                deposit = deposit.Substring(0, deposit.Length - 2);
+
+                Console.WriteLine("Date: " + date + " Withdraw = $" + withdraw + " Deposit = $" + deposit);
+                Console.WriteLine("-------------------------------------------------------------------------");
+            }
+            CheckBalance(cust);
+        }
+        #endregion
     }
 }

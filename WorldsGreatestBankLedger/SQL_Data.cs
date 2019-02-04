@@ -1,24 +1,19 @@
 ﻿using System;
+using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
-
 namespace WorldsGreatestBankLedger
 {
     class SQL_Data
     {
         private static SqlConnection con = new SqlConnection();
 
+        
+
         #region Private Methods
-        private static void DBConnect()//using this so I can easily change Connection String depending on where I am working on this.
+        private static void DBConnect()//set ConnectionString
         {
-            //Steves local desktop (comment out if not using)
-            //con.ConnectionString = (@"Data Source = localhost; Initial Catalog = WorldsGreatestBankingLedger; Integrated Security = True");
-
-            //Steves local laptop (comment out if not using)
-            con.ConnectionString = (@"Data Source=BELDZB15U31619\MSSQLSERVER2017;Initial Catalog=WorldsGreatestBankingLedger;Integrated Security=True");
-
-            //your custom DB Connection String (comment out if not using)
-            //con.ConnectionString = (@"CHANGE ME TO YOUR CONNECTION STRING AND UNCOMMENT");
+            con.ConnectionString = ConfigurationManager.ConnectionStrings["dbCon"].ConnectionString;
         }
 
         private static int ExecuteSPROC(SqlCommand cmd)//This is reusable for SPROCS
